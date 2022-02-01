@@ -62,7 +62,7 @@ pypi:
 PROJECT_ID='le-wagon-745'
 
 # bucket name - replace with your GCP bucket name
-BUCKET_NAME='wagon-data-745-dantas'
+BUCKET_NAME='taxi-estimator-dantas'
 
 # choose your region from https://cloud.google.com/storage/docs/locations#available_locations
 REGION=europe-west1

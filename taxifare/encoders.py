@@ -1,6 +1,6 @@
 from sklearn.base import BaseEstimator, TransformerMixin
 import pandas as pd
-from TaxiFareModel.utils import haversine_vectorized
+from taxifare.utils import haversine_vectorized
 
 
 class TimeFeaturesEncoder(BaseEstimator, TransformerMixin):

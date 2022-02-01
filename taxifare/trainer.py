@@ -1,17 +1,21 @@
 # imports
 from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
+import mlflow
+from termcolor import colored
 from sklearn.preprocessing import StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
-from TaxiFareModel.encoders import DistanceTransformer
-from TaxiFareModel.encoders import TimeFeaturesEncoder
-from TaxiFareModel.data import *
-from TaxiFareModel.utils import compute_rmse
+from taxifare.encoders import DistanceTransformer
+from taxifare.encoders import TimeFeaturesEncoder
+from taxifare.data import *
+from taxifare.utils import compute_rmse
 import joblib
+from memoized_property import memoized_property
+from mlflow.tracking import MlflowClient
 
-class Trainer():
+class Trainer(object):
     def __init__(self, X, y):
         """
             X: pandas DataFrame
@@ -21,7 +25,11 @@ class Trainer():
         self.X = X
         self.y = y
         self.MLFLOW_URI = "https://mlflow.lewagon.co/"
-        self.experiment_name = "[NL][AMSTERDAM][LRMD] taxifaremodel"
+        self.experiment_name = "NL AMSTERDAM LRMD TAXImodel"
+
+    def set_experiment_name(self, experiment_name):
+        '''defines the experiment name for MLFlow'''
+        self.experiment_name = experiment_name
 
     def set_pipeline(self):
         """defines the pipeline as a class attribute"""
@@ -44,21 +52,23 @@ class Trainer():
                 ('linear_model', LinearRegression())
                         ])
 
-    def run(self,test_ratio):
-        """set and train the pipeline"""
+    def run(self):
         self.set_pipeline()
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y, test_size=test_ratio)
-        self.pipeline.fit(self.X_train,self.y_train)
-        joblib.dump(self.pipeline, 'pipeline.joblib')
+        self.mlflow_log_param("model", "Linear")
+        self.pipeline.fit(self.X, self.y)
 
-    def evaluate(self):
+    def evaluate(self, X_test, y_test):
         """evaluates the pipeline on df_test and return the RMSE"""
         '''returns the value of the RMSE'''
+        y_pred = self.pipeline.predict(X_test)
+        rmse = compute_rmse(y_pred, y_test)
+        self.mlflow_log_metric("rmse", rmse)
+        return round(rmse, 2)
 
-        y_pred = self.pipeline.predict(self.X_test)
-        rmse = compute_rmse(y_pred, self.y_test)
-        print(rmse)
-        return rmse
+    def save_model_locally(self):
+        """Save the model into a .joblib format"""
+        joblib.dump(self.pipeline, 'model.joblib')
+        print(colored("model.joblib saved locally", "green"))
 
     @memoized_property
     def mlflow_client(self):
@@ -83,10 +93,16 @@ class Trainer():
         self.mlflow_client.log_metric(self.mlflow_run.info.run_id, key, value)
 
 if __name__ == "__main__":
-    # get data
-    # clean data
-    # set X and y
-    # hold out
-    # train
-    # evaluate
-    print('TODO')
+    df=get_data()
+    df=clean_data(df)
+    y=df['fare_amount']
+    X=df.drop("fare_amount",axis=1)
+
+    X_train, X_val, y_train, y_val = train_test_split(X,y,test_size=0.15)
+    trainer=Trainer(X=X_train,y=y_train)
+    trainer.set_experiment_name('xp4')
+    trainer.run(test_ratio=0.3)
+    rmse=trainer.evaluate(X_val,y_val)
+    print(f"rmse:{rmse}")
+    trainer.save_model_locally()
+    storage_upload()
