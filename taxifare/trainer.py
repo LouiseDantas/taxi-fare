@@ -70,6 +70,21 @@ class Trainer(object):
         joblib.dump(self.pipeline, 'model.joblib')
         print(colored("model.joblib saved locally", "green"))
 
+    def save_model_to_gcp(reg):
+        """Save the model into a .joblib and upload it on Google Storage /models folder
+        HINTS : use sklearn.joblib (or jbolib) libraries and google-cloud-storage"""
+        from sklearn.externals import joblib
+        local_model_name = 'model.joblib'
+        # saving the trained model to disk (which does not really make sense
+        # if we are running this code on GCP, because then this file cannot be accessed once the code finished its execution)
+        joblib.dump(reg, local_model_name)
+        print("saved model.joblib locally")
+        client = storage.Client().bucket(BUCKET_NAME)
+        storage_location = f"models/{MODEL_NAME}/{MODEL_VERSION}/{local_model_name}"
+        blob = client.blob(storage_location)
+        blob.upload_from_filename(local_model_name)
+        print("uploaded model.joblib to gcp cloud storage under \n => {}".format(storage_location))
+
     @memoized_property
     def mlflow_client(self):
         mlflow.set_tracking_uri(self.MLFLOW_URI)
@@ -93,16 +108,17 @@ class Trainer(object):
         self.mlflow_client.log_metric(self.mlflow_run.info.run_id, key, value)
 
 if __name__ == "__main__":
-    df=get_data()
-    df=clean_data(df)
-    y=df['fare_amount']
-    X=df.drop("fare_amount",axis=1)
-
-    X_train, X_val, y_train, y_val = train_test_split(X,y,test_size=0.15)
-    trainer=Trainer(X=X_train,y=y_train)
-    trainer.set_experiment_name('xp4')
-    trainer.run(test_ratio=0.3)
-    rmse=trainer.evaluate(X_val,y_val)
-    print(f"rmse:{rmse}")
+    N = 100
+    df = get_data_from_gcp(nrows=N)
+    df = clean_data(df)
+    y = df["fare_amount"]
+    X = df.drop("fare_amount", axis=1)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3)
+    # Train and save model, locally and
+    trainer = Trainer(X=X_train, y=y_train)
+    trainer.set_experiment_name('xp2')
+    trainer.run()
+    rmse = trainer.evaluate(X_test, y_test)
+    print(f"rmse: {rmse}")
     trainer.save_model_locally()
     storage_upload()
